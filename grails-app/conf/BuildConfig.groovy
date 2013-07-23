@@ -62,6 +62,7 @@ grails.project.dependency.resolution = {
 
 	compile ":platform-core:1.0.RC5"
 	compile ":html5-mobile-scaffolding:0.6.1"
+	compile ":jsonp:0.2"
     }
 
 }
