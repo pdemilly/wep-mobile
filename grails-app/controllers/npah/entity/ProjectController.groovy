@@ -1,163 +1,100 @@
 package npah.entity
 
-
-
-import grails.converters.JSON
-import org.grails.datastore.mapping.validation.ValidationErrors
-import org.springframework.dao.DataIntegrityViolationException
-import org.codehaus.groovy.grails.commons.DefaultGrailsDomainClass
-
 class ProjectController {
 
     static allowedMethods = [save: "POST", update: "POST", delete: "POST"]
 
-    def index() {
+    def index = {
         redirect(action: "list", params: params)
     }
-	
-    def list() {
-      params.max = Math.min(params.max ? params.int('max') : 10, 100)
-      render Project.list(params) as JSON
+
+    def list = {
+        params.max = Math.min(params.max ? params.int('max') : 10, 100)
+        [projectInstanceList: Project.list(params), projectInstanceTotal: Project.count()]
     }
 
-    def save() {
-      def jsonObject = JSON.parse(params.project)
-      
-      def addresses = []
-      jsonObject.addresses.each() {
-         addresses << Address.get(it.id)
-      }
-      jsonObject.addresses = null
-      
-      def emails = []
-      jsonObject.emails.each() {
-         emails << Email.get(it.id)
-      }
-      jsonObject.emails = null
-      
-      def phoneNumbers = []
-      jsonObject.phoneNumbers.each() {
-         phoneNumbers << Phone.get(it.id)
-      }
-      jsonObject.phoneNumbers = null
-      
-      Project projectInstance = new Project(jsonObject)
-      
-      projectInstance.addresses = addresses
-      
-      projectInstance.emails = emails
-      
-      projectInstance.phoneNumbers = phoneNumbers
-      
-      if (!projectInstance.save(flush: true)) {
-        ValidationErrors validationErrors = projectInstance.errors
-        render validationErrors as JSON
-        return
-      }
-      
-      def asJson = projectInstance as JSON
-      event topic:"save-project", data: asJson.toString()
-      render projectInstance as JSON
-    }
-    
-    def show() {
-      def projectInstance = Project.get(params.id)
-      if (!projectInstance) {
-        flash.message = message(code: 'default.not.found.message', args: [message(code: 'project.label', default: 'Project'), params.id])
-        render flash as JSON
-        return
-      }
-      
-      render projectInstance as JSON
+    def create = {
+        def projectInstance = new Project()
+        projectInstance.properties = params
+        return [projectInstance: projectInstance]
     }
 
-    def update() {
-      def jsonObject = JSON.parse(params.project)
-
-      def projectInstance = Project.get(jsonObject.id)
-
-      if (!projectInstance) {
-        flash.message = message(code: 'default.not.found.message', args: [message(code: 'project.label', default: 'Project'), params.id])
-        render flash as JSON
-        return
-      }
-
-      if (jsonObject.version) {
-        def version = jsonObject.version.toLong()
-        if (projectInstance.version > version) {
-          projectInstance.errors.rejectValue("version", "default.optimistic.locking.failure",
-                                                           [message(code: 'project.label', default: 'Project')] as Object[],
-                                                           "Another user has updated this Project while you were editing")
-          ValidationErrors validationErrors = projectInstance.errors
-          render validationErrors as JSON
-          return
+    def save = {
+        def projectInstance = new Project(params)
+        if (projectInstance.save(flush: true)) {
+            flash.message = "${message(code: 'default.created.message', args: [message(code: 'project.label', default: 'Project'), projectInstance.id])}"
+            redirect(action: "show", id: projectInstance.id)
         }
-      }
-
-      Project projectReceived = new Project(jsonObject)
-
-      new DefaultGrailsDomainClass(Project.class).persistentProperties.each() {
-          if (it.oneToOne || it.embedded) {
-            projectInstance[it.name] = it.type.get(jsonObject["${it.name}.id"])
-          } else {
-            projectInstance[it.name] = projectReceived[it.name]
-          }
-      }
-      
-      projectInstance.addresses = []
-      jsonObject.addresses.each() {
-        projectInstance.addresses << Address.get(it.id)
-      }
-      projectInstance.emails = []
-      jsonObject.emails.each() {
-        projectInstance.emails << Email.get(it.id)
-      }
-      projectInstance.phoneNumbers = []
-      jsonObject.phoneNumbers.each() {
-        projectInstance.phoneNumbers << Phone.get(it.id)
-      }
-      if (!projectInstance.save(flush: true)) {
-        ValidationErrors validationErrors = projectInstance.errors
-        render validationErrors as JSON
-        return
-      }
-      
-      def asJson = projectInstance as JSON
-      event topic:"update-project", data: asJson.toString()
-      render projectInstance as JSON
+        else {
+            render(view: "create", model: [projectInstance: projectInstance])
+        }
     }
 
-    def delete() {
-      def projectInstance = Project.get(params.id)
-      
-      projectInstance.addresses.each() {
-        Address.get(it.getId());
-      }
-      
-      projectInstance.emails.each() {
-        Email.get(it.getId());
-      }
-      
-      projectInstance.phoneNumbers.each() {
-        Phone.get(it.getId());
-      }
-      
-      if (!projectInstance) {
-        flash.message = message(code: 'default.not.found.message', args: [message(code: 'project.label', default: 'Project'), params.id])
-        render flash as JSON
-        return
-      }
-      try {
-        projectInstance.delete(flush: true)
-      }
-      catch (DataIntegrityViolationException e) {
-        flash.message = message(code: 'default.not.deleted.message', args: [message(code: 'project.label', default: 'Project'), params.id])
-        render flash as JSON
-        return
-      }
-      
-      event topic:"delete-project", data: projectInstance
-      render projectInstance as JSON
+    def show = {
+        def projectInstance = Project.get(params.id)
+        if (!projectInstance) {
+            flash.message = "${message(code: 'default.not.found.message', args: [message(code: 'project.label', default: 'Project'), params.id])}"
+            redirect(action: "list")
+        }
+        else {
+            [projectInstance: projectInstance]
+        }
     }
-    
+
+    def edit = {
+        def projectInstance = Project.get(params.id)
+        if (!projectInstance) {
+            flash.message = "${message(code: 'default.not.found.message', args: [message(code: 'project.label', default: 'Project'), params.id])}"
+            redirect(action: "list")
+        }
+        else {
+            return [projectInstance: projectInstance]
+        }
+    }
+
+    def update = {
+        def projectInstance = Project.get(params.id)
+        if (projectInstance) {
+            if (params.version) {
+                def version = params.version.toLong()
+                if (projectInstance.version > version) {
+                    
+                    projectInstance.errors.rejectValue("version", "default.optimistic.locking.failure", [message(code: 'project.label', default: 'Project')] as Object[], "Another user has updated this Project while you were editing")
+                    render(view: "edit", model: [projectInstance: projectInstance])
+                    return
+                }
+            }
+            projectInstance.properties = params
+            if (!projectInstance.hasErrors() && projectInstance.save(flush: true)) {
+                flash.message = "${message(code: 'default.updated.message', args: [message(code: 'project.label', default: 'Project'), projectInstance.id])}"
+                redirect(action: "show", id: projectInstance.id)
+            }
+            else {
+                render(view: "edit", model: [projectInstance: projectInstance])
+            }
+        }
+        else {
+            flash.message = "${message(code: 'default.not.found.message', args: [message(code: 'project.label', default: 'Project'), params.id])}"
+            redirect(action: "list")
+        }
+    }
+
+    def delete = {
+        def projectInstance = Project.get(params.id)
+        if (projectInstance) {
+            try {
+                projectInstance.delete(flush: true)
+                flash.message = "${message(code: 'default.deleted.message', args: [message(code: 'project.label', default: 'Project'), params.id])}"
+                redirect(action: "list")
+            }
+            catch (org.springframework.dao.DataIntegrityViolationException e) {
+                flash.message = "${message(code: 'default.not.deleted.message', args: [message(code: 'project.label', default: 'Project'), params.id])}"
+                redirect(action: "show", id: params.id)
+            }
+        }
+        else {
+            flash.message = "${message(code: 'default.not.found.message', args: [message(code: 'project.label', default: 'Project'), params.id])}"
+            redirect(action: "list")
+        }
+    }
 }
